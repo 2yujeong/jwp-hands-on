@@ -1,6 +1,9 @@
 server:
   tomcat:
-    accept-count: 1
-    max-connections: 1
+    accept-count: 10 # 대기 큐 크기 (클라이언트가 HTTP Request를 요청했을 때 Idle Thread가 존재하지 않을 때, Idle Thread가 생길 때까지 기다리는 대기 큐의 길이)
+    max-connections: 10 # 한 번에 병렬 처리 가능한 요청 개수 default max threads(BIO) or 10000(NIO)
     threads:
-      max: 2
+      max: 2 # Connector가 생성할 수 있는 최대 Thread 수 default 200
+
+# BIO는 Blocking이므로 하나의 요청 당 하나의 스레드만 할당되며, 해당 스레드가 I/O 이슈로 인해 대기할 때 제어권을 계속 쥐고있는 상태로 대기 -> 하나의 요청 당 하나의 스레드 할당이므로 max threads와 max-connections 값이 동일
+# NIO는 NonBlocking이므로 요청이 I/O 이슈로 인해 대기할 때, 해당 요청을 실행 중이던 스레드를 다른 진행 가능한 요청에 할당시킨다. -> 요청이 늘어난다고 해서 새로운 스레드 생성할 필요 X, 놀고있는 스레드 가져오면 되기 때문 -> 최대 스레드 개수보다 최대 요청 개수가 더 많아도 된다.
