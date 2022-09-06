@@ -11,9 +11,9 @@ public class UserServlet {
         join(user);
     }
 
-    private void join(final User user) {
+    private synchronized void join(final User user) {
         if (!users.contains(user)) {
-            users.add(user);
+            users.add(user); // synchronized로 인해 두 번째로 join에 진입한 thread는 if문을 통과하지 못해서 line 16 디버깅에 걸리지 않음
         }
     }
 

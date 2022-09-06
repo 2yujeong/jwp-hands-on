@@ -37,4 +37,36 @@ class ConcurrencyTest {
         // 하지만 디버거로 개별 스레드를 일시 중지하면 if절 조건이 true가 되고 크기가 2가 된다. 왜 그럴까?
         assertThat(userServlet.getUsers()).hasSize(1);
     }
+
+    @Test
+    void solve1() throws InterruptedException {
+        final var userServlet = new UserServlet();
+
+        final var firstThread = new Thread(new HttpProcessor(new User("gugu"), userServlet));
+        final var secondThread = new Thread(new HttpProcessor(new User("gugu"), userServlet));
+
+        // firstThread가 종료되기를 기다렸다가 secondThread를 실행한다.
+        firstThread.start();
+        firstThread.join();
+        secondThread.start();
+        secondThread.join();
+
+        assertThat(userServlet.getUsers()).hasSize(1);
+    }
+
+    @Test
+    void solve2() throws InterruptedException {
+        final var userServlet = new UserServlet();
+
+        final var firstThread = new Thread(new HttpProcessor(new User("gugu"), userServlet));
+        final var secondThread = new Thread(new HttpProcessor(new User("gugu"), userServlet));
+
+        // 임계 영역인 userServlet.join() 메소드에 synchronized 키워드를 이용하여 상호 배제를 적용한다.
+        secondThread.start();
+        firstThread.start();
+        secondThread.join();
+        firstThread.join();
+
+        assertThat(userServlet.getUsers()).hasSize(1);
+    }
 }
