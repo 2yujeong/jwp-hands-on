@@ -2,10 +2,10 @@ package nextstep.study.di.stage4.annotations;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
+import nextstep.study.ConsumerWrapper;
 
 /**
  * 스프링의 BeanFactory, ApplicationContext에 해당되는 클래스
@@ -16,11 +16,11 @@ class DIContainer {
 
     private DIContainer(final Set<Class<?>> classes) {
         this.beans = createBeans(classes);
-        this.beans.forEach(this::handleInjection);
+        this.beans.forEach(this::executeInjection);
     }
 
     public static DIContainer createContainerForPackage(final String rootPackageName) {
-        final Set<Class<?>> classes = ClassPathScanner.getAllClassesInPackage(rootPackageName);
+        final Set<Class<?>> classes = ClassPathScanner.getAllBeanClassesInPackage(rootPackageName);
         return new DIContainer(classes);
     }
 
@@ -42,34 +42,26 @@ class DIContainer {
         }
     }
 
-    private void handleInjection(final Object bean) {
+    private void executeInjection(final Object bean) {
         final Field[] fields = bean.getClass().getDeclaredFields();
-        for (Field field : fields) {
-            executeFieldInjection(bean, field);
-        }
+        Arrays.stream(fields)
+                .filter(field -> field.isAnnotationPresent(Inject.class))
+                .forEach(field -> setField(bean, field));
     }
 
-    private void executeFieldInjection(final Object bean, final Field field) {
-        if (field.isAnnotationPresent(Inject.class)) {
-            field.setAccessible(true);
-            try {
-                final Object injectionBean = getBean(field.getType());
-                field.set(bean, injectionBean);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        }
+    private void setField(final Object bean, final Field field) {
+        field.setAccessible(true);
+        beans.stream()
+                .filter(field.getType()::isInstance)
+                .forEach(ConsumerWrapper.accept(matchBean -> field.set(bean, matchBean)));
     }
 
     @SuppressWarnings("unchecked")
     public <T> T getBean(final Class<T> aClass) {
-        final List<Object> beans = new ArrayList<>(this.beans);
-        for (Object bean : beans) {
-            final List<Class<?>> beanInterfaces = List.of(bean.getClass().getInterfaces());
-            if (beanInterfaces.contains(aClass) || bean.getClass().equals(aClass)) {
-                return (T) bean;
-            }
-        }
-        throw new IllegalStateException();
+        return beans.stream()
+                .filter(aClass::isInstance)
+                .findFirst()
+                .map(bean -> (T) bean)
+                .orElseThrow(IllegalArgumentException::new);
     }
 }

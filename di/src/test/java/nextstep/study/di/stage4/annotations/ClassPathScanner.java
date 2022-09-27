@@ -6,7 +6,7 @@ import org.reflections.Reflections;
 
 public class ClassPathScanner {
 
-    public static Set<Class<?>> getAllClassesInPackage(final String packageName) {
+    public static Set<Class<?>> getAllBeanClassesInPackage(final String packageName) {
         final Reflections reflections = new Reflections(packageName);
 
         final Set<Class<?>> repositoryClasses = reflections.getTypesAnnotatedWith(Repository.class);

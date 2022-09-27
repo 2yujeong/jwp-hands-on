@@ -2,10 +2,9 @@ package nextstep.study.di.stage3.context;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
+import nextstep.study.ConsumerWrapper;
 
 /**
  * 스프링의 BeanFactory, ApplicationContext에 해당되는 클래스
@@ -25,7 +24,6 @@ class DIContainer {
         for (Class<?> bean : classes) {
             beans.add(getNewInstance(bean));
         }
-
         return beans;
     }
 
@@ -49,37 +47,18 @@ class DIContainer {
     }
 
     private void setField(final Object bean, final Field field) {
-        if (contains(field)) {
-            field.setAccessible(true);
-            try {
-                final Object injectionBean = getBean(field.getType());
-                field.set(bean, injectionBean);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    private boolean contains(final Field field) {
-        final ArrayList<Object> beansList = new ArrayList<>(beans);
-        for (Object bean : beansList) {
-            final List<Class<?>> interfaces = List.of(bean.getClass().getInterfaces());
-            if (interfaces.contains(field.getType()) || bean.getClass().equals(field.getType())) {
-                return true;
-            }
-        }
-        return false;
+        field.setAccessible(true);
+        beans.stream()
+                .filter(field.getType()::isInstance)
+                .forEach(ConsumerWrapper.accept(matchBean -> field.set(bean, matchBean)));
     }
 
     @SuppressWarnings("unchecked")
     public <T> T getBean(final Class<T> aClass) {
-        final List<Object> beans = new ArrayList<>(this.beans);
-        for (Object bean : beans) {
-            final List<Class<?>> beanInterfaces = List.of(bean.getClass().getInterfaces());
-            if (beanInterfaces.contains(aClass) || bean.getClass().equals(aClass)) {
-                return (T) bean;
-            }
-        }
-        throw new IllegalStateException();
+        return beans.stream()
+                .filter(aClass::isInstance)
+                .findFirst()
+                .map(bean -> (T) bean)
+                .orElseThrow(IllegalArgumentException::new);
     }
 }
