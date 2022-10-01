@@ -28,7 +28,7 @@ class Stage1Test {
      */
     @Test
     void testJdbcConnectionPool() throws SQLException {
-        final JdbcConnectionPool jdbcConnectionPool = null;
+        final JdbcConnectionPool jdbcConnectionPool = JdbcConnectionPool.create(H2_URL, USER, PASSWORD);
 
         assertThat(jdbcConnectionPool.getActiveConnections()).isZero();
         try (final var connection = jdbcConnectionPool.getConnection()) {
@@ -62,7 +62,23 @@ class Stage1Test {
     void testHikariCP() {
         final var hikariConfig = new HikariConfig();
 
+        hikariConfig.setJdbcUrl(H2_URL);
+        hikariConfig.setUsername(USER);
+        hikariConfig.setPassword(PASSWORD);
+
+        // Neither of the above parameters have any effect if the cache is in fact disabled, as it is by default.
+        hikariConfig.addDataSourceProperty("cachePrepStmts", "true");
+        // This sets the number of prepared statements that the MySQL driver will cache per connection. The default is a conservative 25.
+        hikariConfig.addDataSourceProperty("prepStmtCacheSize", "250");
+        // This is the maximum length of a prepared SQL statement that the driver will cache. The MySQL default is 256.
+        hikariConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+        // Newer versions of MySQL support server-side prepared statements, this can provide a substantial performance boost.
+        hikariConfig.addDataSourceProperty("u행seServerPrepStmts", "true");
+
+
         final var dataSource = new HikariDataSource(hikariConfig);
+        dataSource.setMaximumPoolSize(5);
+
         final var properties = dataSource.getDataSourceProperties();
 
         assertThat(dataSource.getMaximumPoolSize()).isEqualTo(5);
