@@ -34,10 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   Read phenomena | Dirty reads | Non-repeatable reads | Phantom reads
  * Isolation level  |             |                      |
  * -----------------|-------------|----------------------|--------------
- * Read Uncommitted |             |                      |
- * Read Committed   |             |                      |
- * Repeatable Read  |             |                      |
- * Serializable     |             |                      |
+ * Read Uncommitted |      +      |          +           |      +
+ * Read Committed   |      -      |          +           |      +
+ * Repeatable Read  |      -      |          -           |      +
+ * Serializable     |      -      |          -           |      -
  */
 class Stage1Test {
 
@@ -58,10 +58,10 @@ class Stage1Test {
      *   Read phenomena | Dirty reads
      * Isolation level  |
      * -----------------|-------------
-     * Read Uncommitted |
-     * Read Committed   |
-     * Repeatable Read  |
-     * Serializable     |
+     * Read Uncommitted |      +
+     * Read Committed   |      -
+     * Repeatable Read  |      -
+     * Serializable     |      -
      */
     @Test
     void dirtyReading() throws SQLException {
@@ -81,7 +81,7 @@ class Stage1Test {
             final var subConnection = dataSource.getConnection();
 
             // 적절한 격리 레벨을 찾는다.
-            final int isolationLevel = Connection.TRANSACTION_NONE;
+            final int isolationLevel = Connection.TRANSACTION_READ_COMMITTED;
 
             // 트랜잭션 격리 레벨을 설정한다.
             subConnection.setTransactionIsolation(isolationLevel);
@@ -106,15 +106,16 @@ class Stage1Test {
 
     /**
      * 격리 수준에 따라 어떤 현상이 발생하는지 테스트를 돌려 직접 눈으로 확인하고 표를 채워보자.
+     * A non-repeatable read is one in which data read twice inside the same transaction cannot be guaranteed to contain the same value.
      * + : 발생
      * - : 발생하지 않음
      *   Read phenomena | Non-repeatable reads
      * Isolation level  |
      * -----------------|---------------------
-     * Read Uncommitted |
-     * Read Committed   |
-     * Repeatable Read  |
-     * Serializable     |
+     * Read Uncommitted |          +
+     * Read Committed   |          +
+     * Repeatable Read  |          -
+     * Serializable     |          -
      */
     @Test
     void noneRepeatable() throws SQLException {
@@ -130,7 +131,7 @@ class Stage1Test {
         connection.setAutoCommit(false);
 
         // 적절한 격리 레벨을 찾는다.
-        final int isolationLevel = Connection.TRANSACTION_NONE;
+        final int isolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
 
         // 트랜잭션 격리 레벨을 설정한다.
         connection.setTransactionIsolation(isolationLevel);
@@ -146,21 +147,23 @@ class Stage1Test {
             // 사용자A가 조회한 gugu 객체를 사용자B가 다시 조회했다.
             final var anotherUser = userDao.findByAccount(subConnection, "gugu");
 
-            // ❗사용자B가 gugu 객체의 비밀번호를 변경했다.(subConnection은 auto commit 상태)
+            // ❗사용자B가 gugu 객체의 비밀번호를 변경했다.(subConnection은 auto commit 상태(setAutoCommit(false) 설정 X))
             anotherUser.changePassword("qqqq");
             userDao.update(subConnection, anotherUser);
         })).start();
 
         sleep(0.5);
 
-        // 사용자A가 다시 gugu 객체를 조회했다.
-        // 사용자B는 패스워드를 변경하고 아직 커밋하지 않았다.
+        // 사용자A가 다시 gugu 객체를 조회했다.(아까 시작했던 트랜잭션(line 131) 내에서 다시 조회)
+        // 사용자B는 패스워드를 변경하고 아직 커밋하지 않았다. // auto commit 때문에 바로 커밋된 거 아닌가??
         final var actual = userDao.findByAccount(connection, "gugu");
 
         // 트랜잭션 격리 레벨에 따라 아래 테스트가 통과한다.
         // 각 격리 레벨은 어떤 결과가 나오는지 직접 확인해보자.
         log.info("isolation level : {}, user : {}", isolationLevel, actual);
         assertThat(actual.getPassword()).isEqualTo("password");
+        // true -> 비밀번호가 바뀌지 않았다 == 같은 트랜잭션 내에서 이전에 조회했던 결과와 같다는 뜻이므로 Non-repeatable reads 발생 X
+        // false -> 비밀번호가 바뀌었다 == Non-repeatable reads 발생
 
         connection.rollback();
     }
@@ -173,10 +176,10 @@ class Stage1Test {
      *   Read phenomena | Phantom reads
      * Isolation level  |
      * -----------------|--------------
-     * Read Uncommitted |
-     * Read Committed   |
-     * Repeatable Read  |
-     * Serializable     |
+     * Read Uncommitted |      +
+     * Read Committed   |      +
+     * Repeatable Read  |      +
+     * Serializable     |      -
      */
     @Test
     void phantomReading() throws SQLException {
@@ -197,7 +200,7 @@ class Stage1Test {
         connection.setAutoCommit(false);
 
         // 적절한 격리 레벨을 찾는다.
-        final int isolationLevel = Connection.TRANSACTION_NONE;
+        final int isolationLevel = Connection.TRANSACTION_SERIALIZABLE;
 
         // 트랜잭션 격리 레벨을 설정한다.
         connection.setTransactionIsolation(isolationLevel);
